@@ -1,5 +1,5 @@
-from flask import Flask
-from models import db, Store, Item
+from flask import Flask, url_for
+from models import db, Store, Item  # Убедитесь, что models.py находится в том же каталоге
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///data.db"
@@ -7,7 +7,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-# Створення таблиць
+# Создание таблиц
 with app.app_context():
     db.create_all()
 
@@ -19,7 +19,17 @@ def home():
              Навчальний проєкт      
     ================================
     """
-    return f"<pre>{banner}</pre><h3>Проєкт працює!</h3>"
+    # Генерируем навигационные гиперссылки с помощью url_for
+    links_html = f"""
+    <nav>
+      <ul>
+         <li><a href="{url_for('create_store_with_items')}">Создать магазин и добавить товары</a></li>
+         <li><a href="{url_for('list_items')}">Список товаров</a></li>
+         <li><a href="{url_for('about')}">О проекте</a></li>
+      </ul>
+    </nav>
+    """
+    return f"<pre>{banner}</pre><h3>Проект работает!</h3>{links_html}"
 
 @app.route("/create")
 def create_store_with_items():
