@@ -1,5 +1,5 @@
 from flask import Flask, url_for
-from models import db, Store, Item  # Переконайтеся, що models.py у тому ж каталозі
+from models import db, Store, Item  # Переконайтеся, що models.py знаходиться в тому ж каталозі
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///data.db"
@@ -15,17 +15,17 @@ with app.app_context():
 def home():
     banner = """
     ================================
-         Flask + SQLAlchemy         
-           Навчальний проєкт      
+          Flask + SQLAlchemy
+              Навчальний проєкт
     ================================
     """
-    # Гіперпосилання для навігації
+    # Генеруємо навігаційні гіперпосилання за допомогою url_for
     links_html = f"""
     <nav>
       <ul>
-         <li><a href="{url_for('create_store_with_items')}">Створити магазин і додати товари</a></li>
-         <li><a href="{url_for('list_items')}">Список товарів</a></li>
-         <li><a href="{url_for('about')}">Про проєкт</a></li>
+          <li><a href="{url_for('create_store_with_items')}">Створити магазин та додати товари</a></li>
+          <li><a href="{url_for('list_items')}">Список товарів</a></li>
+          <li><a href="{url_for('about')}">Про проєкт</a></li>
       </ul>
     </nav>
     """
@@ -49,7 +49,7 @@ def create_store_with_items():
 
     items_list = "<br>".join(f"- {name}" for name in added_items)
 
-    return f"Додано магазин '<b>{store.name}</b>' із товарами:<br>{items_list}"
+    return f"Додано магазин '<b>{store.name}</b>' з товарами:<br>{items_list}"
 
 @app.route("/items")
 def list_items():
@@ -58,16 +58,16 @@ def list_items():
         return "Ще немає жодного товару в базі."
 
     item_list = "<br>".join(f"{item.id}. {item.name} (Магазин ID: {item.store_id})" for item in items)
-    return f"<h3>Усі товари в базі:</h3><br>{item_list}"
+    return f"<h3>Всі товари в базі:</h3><br>{item_list}"
 
 @app.route("/about")
 def about():
-    return "<h3>FLASK_SQLALCHEMY_PROJECT-1</h3><p>Простий проєкт на Flask + SQLite для навчання та тестування.</p>"
+    return "<h3>FLASK_SQLALCHEMY_PROJECT-1</h3><p>Легка база на Flask + SQLite для навчання та тестів.</p>"
 
 if __name__ == "__main__":
     print("""
     =========================================
-           Запуск Flask-проєкту           
+              Стартує Flask-проєкт
     =========================================
     """)
     app.run(debug=True)
