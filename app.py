@@ -7,13 +7,19 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-#  Створення таблиць 
+# Створення таблиць
 with app.app_context():
     db.create_all()
 
 @app.route("/")
 def home():
-    return "Flask + SQLAlchemy працює!"
+    banner = """
+    ================================
+          Flask + SQLAlchemy         
+             Навчальний проєкт      
+    ================================
+    """
+    return f"<pre>{banner}</pre><h3>Проєкт працює!</h3>"
 
 @app.route("/create")
 def create_store_with_items():
@@ -21,14 +27,37 @@ def create_store_with_items():
     db.session.add(store)
     db.session.commit()
 
-    item1 = Item(name="Молоко", store_id=store.id)
-    item2 = Item(name="Хліб", store=store)
+    items = ["Молоко", "Хліб", "Сир", "Кефір"]
+    added_items = []
 
-    db.session.add(item1)
-    db.session.add(item2)
+    for item_name in items:
+        item = Item(name=item_name, store=store)
+        db.session.add(item)
+        added_items.append(item_name)
+
     db.session.commit()
 
-    return f"Додано магазин '{store.name}' з товарами: {item1.name}, {item2.name}"
+    items_list = "<br>".join(f"- {name}" for name in added_items)
+
+    return f"Додано магазин '<b>{store.name}</b>' з товарами:<br>{items_list}"
+
+@app.route("/items")
+def list_items():
+    items = Item.query.all()
+    if not items:
+        return "Ще немає жодного товару в базі."
+
+    item_list = "<br>".join(f"{item.id}. {item.name} (Магазин ID: {item.store_id})" for item in items)
+    return f"<h3>Всі товари в базі:</h3><br>{item_list}"
+
+@app.route("/about")
+def about():
+    return "<h3>FLASK_SQLALCHEMY_PROJECT-1</h3><p>Легка база на Flask + SQLite для навчання та тестів.</p>"
 
 if __name__ == "__main__":
+    print("""
+    =========================================
+             Стартує Flask-проєкт           
+    =========================================
+    """)
     app.run(debug=True)
