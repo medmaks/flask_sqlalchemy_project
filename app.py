@@ -1,122 +1,124 @@
-from flask import Flask, url_for
+from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///data.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["JWT_SECRET_KEY"] = "super-secret-key"  # У виробничій системі використовуйте більш надійний ключ
 
 db = SQLAlchemy(app)
+jwt = JWTManager(app)
 
-# ======= Моделі =======
-
-# Таблиця-зв’язок
-item_category = db.Table("item_category",
-    db.Column("item_id", db.Integer, db.ForeignKey("item.id"), primary_key=True),
-    db.Column("category_id", db.Integer, db.ForeignKey("category.id"), primary_key=True)
-)
-
-class Store(db.Model):
+# Модель користувача
+class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    items = db.relationship("Item", backref="store", lazy=True)
-
-class Item(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    store_id = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
-    categories = db.relationship("Category", secondary=item_category, backref="items")
-
-class Category(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-
-# =======================
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(128), nullable=False)
 
 with app.app_context():
     db.create_all()
 
-@app.route("/")
-def home():
-    banner = """
-    ================================
-          Flask + SQLAlchemy
-              Практична 4
-    ================================
-    """
-    links_html = f"""
-    <nav>
-      <ul>
-          <li><a href="{url_for('create_store_with_items')}">Створити магазин та товари</a></li>
-          <li><a href="{url_for('create_categories')}">Створити категорії та призначити товари</a></li>
-          <li><a href="{url_for('list_items')}">Список товарів</a></li>
-          <li><a href="{url_for('about')}">Про проєкт</a></li>
-      </ul>
-    </nav>
-    """
-    return f"<pre>{banner}</pre><h3>Проєкт працює!</h3>{links_html}"
-
-@app.route("/create")
-def create_store_with_items():
-    store = Store(name="Мій магазин - RETRON")
-    db.session.add(store)
-    db.session.commit()
-
-    items = ["Молоко", "Хліб", "Сир", "Кефір"]
-    added_items = []
-
-    for item_name in items:
-        item = Item(name=item_name, store=store)
-        db.session.add(item)
-        added_items.append(item_name)
-
-    db.session.commit()
-
-    items_list = "<br>".join(f"- {name}" for name in added_items)
-    return f"Додано магазин '<b>{store.name}</b>' з товарами:<br>{items_list}"
-
-@app.route("/categories")
-def create_categories():
-    # Створення категорій
-    category1 = Category(name="Напої")
-    category2 = Category(name="Молочні продукти")
-
-    db.session.add_all([category1, category2])
-    db.session.commit()
-
-    # Призначаємо товари категоріям
-    milk = Item.query.filter_by(name="Молоко").first()
-    kefir = Item.query.filter_by(name="Кефір").first()
-
-    if milk and kefir:
-        milk.categories.append(category2)
-        kefir.categories.extend([category1, category2])
-
-        db.session.commit()
-        return "Категорії створено та призначено товарам."
+# Ендпоінт реєстрації
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "GET":
+        # Відображення сторінки з формою реєстрації
+        return render_template_string("""
+            <h2>Реєстрація</h2>
+            <form method="post" action="/register">
+              <input type="text" name="username" placeholder="Ім'я користувача" required><br>
+              <input type="password" name="password" placeholder="Пароль" required><br>
+              <button type="submit">Зареєструватися</button>
+            </form>
+            <br>
+            <a href="/login">Вже зареєстровані? Увійти</a>
+        """)
     else:
-        return "Спочатку додайте товари на /create."
+        # Обробка POST-запиту. Перевіряємо, чи дані надходять у форматі JSON чи як дані форми
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form
 
-@app.route("/items")
-def list_items():
-    items = Item.query.all()
-    if not items:
-        return "Ще немає жодного товару в базі."
+        username = data.get("username")
+        password = data.get("password")
 
-    result = ""
-    for item in items:
-        categories = ", ".join(cat.name for cat in item.categories) if item.categories else "Немає категорій"
-        result += f"{item.id}. {item.name} (Магазин ID: {item.store_id}) — {categories}<br>"
+        if not username or not password:
+            return jsonify({"msg": "Потрібно вказати username та password"}), 400
 
-    return f"<h3>Всі товари в базі:</h3><br>{result}"
+        if User.query.filter_by(username=username).first():
+            return jsonify({"msg": "Користувач з таким ім'ям вже існує"}), 400
 
-@app.route("/about")
-def about():
-    return "<h3>FLASK_SQLALCHEMY_PROJECT-1</h3><p>Практична робота 4: Many-to-Many на Flask + SQLite для навчання.</p>"
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Якщо реєстрація пройшла через форму, перенаправляємо на сторінку входу
+        if request.is_json:
+            return jsonify({"msg": "Користувача успішно створено"}), 201
+        else:
+            return redirect(url_for("login"))
+
+# Ендпоінт входу
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        # Відображення сторінки з формою входу
+        return render_template_string("""
+            <h2>Вхід</h2>
+            <form method="post" action="/login">
+              <input type="text" name="username" placeholder="Ім'я користувача" required><br>
+              <input type="password" name="password" placeholder="Пароль" required><br>
+              <button type="submit">Увійти</button>
+            </form>
+            <br>
+            <a href="/register">Зареєструватися</a>
+        """)
+    else:
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form
+
+        username = data.get("username")
+        password = data.get("password")
+
+        user = User.query.filter_by(username=username).first()
+        if not user or not check_password_hash(user.password, password):
+            if request.is_json:
+                return jsonify({"msg": "Невірне ім'я користувача або пароль"}), 401
+            else:
+                return render_template_string("""
+                    <h3>Невірне ім'я користувача або пароль</h3>
+                    <a href='/login'>Спробувати ще раз</a>
+                """)
+
+        # Генеруємо access_token, перетворюючи user.id на рядок
+        access_token = create_access_token(identity=str(user.id))
+
+        if request.is_json:
+            return jsonify({"access_token": access_token}), 200
+        else:
+            return render_template_string(f"""
+                <h3>Вхід виконано успішно!</h3>
+                <p>Ваш токен: {access_token}</p>
+                <a href="/">Перейти на головну сторінку</a>
+            """)
+
+# Захищений ендпоінт
+@app.route("/")
+@jwt_required()
+def home():
+    return render_template_string("""
+        <h2>Головна сторінка</h2>
+        <p>Ви успішно аутентифіковані!</p>
+        <ul>
+            <li><a href="/some_protected_endpoint">Інший захищений ендпоінт</a></li>
+        </ul>
+    """)
 
 if __name__ == "__main__":
-    print("""
-    =========================================
-              Стартує Flask-проєкт
-    =========================================
-    """)
     app.run(debug=True)
